@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Computer Graphic</title>
+	<style type="text/css">
+		.canvascss {
+			margin-top: 50px;
+			margin-left: 50px;
+		}
+	</style>
+	<script type="text/javascript">
+
+		function ToRadian(angle) {
+			return angle * Math.PI / 180;
+		}
+
+
+		window.onload = function() {
+			var sin = Math.sin;
+			var cos = Math.cos;
+			var sqrt = Math.sqrt;
+
+			var canvas1 = document.getElementById('canvas1');
+			var context = canvas1.getContext('2d');
+
+			var orgX = canvas1.width / 2;
+			var orgY = canvas1.height / 2 ;
+
+			var rotateX = ToRadian(30);
+			var rotateY = ToRadian(-30);
+
+			var sinRotateX = sin(rotateX);
+			var cosRotateX = sin(rotateX);
+			var sinRotateY = sin(rotateY);
+			var cosRotateY = sin(rotateY);
+
+			context.beginPath();
+
+			for (var z = 200; z>= -200; z-=10) {
+				for (var x = -200; x<= 200; x+=10) {
+					context.moveTo(x, z);
+					context.lineTo(x+1, z+1);
+					context.stroke();
+					// alert('移動至x=' + (x+1) + ',z=' + (z+1));
+				}
+			}
+
+			context.closePath();
+
+			
+
+
+
+		};
+
+
+	</script>
+</head>
+<body>
+	<canvas class="canvascss" id="canvas1" width="640px" height="480px"></canvas>
+
+
+
+</body>
+</html>
