@@ -1,5 +1,6 @@
 //
 var PoinstList = new Array();
+var DepthList = new Array();
 
 // Cube face data
 var CubeFaces =
@@ -62,8 +63,11 @@ var CubeEdges =
     {i:3, j:7},
 ];
 
+
+
+
 // Camera position
-var CameraPos = {x: 0, y: 0, z: 5};
+var CameraPos = {x: 0, y: 0, z: -20};
 
 // Camera distortion
 var RatioConst = 300;
@@ -86,9 +90,9 @@ function RenderScene()
     var CenterY = CanvasHeight / 2;
     
     //slightly grow the rotations
-	//CameraRot.x +=0.02;
+	CameraRot.x +=0.02;
 	CameraRot.y +=0.02;
-	//CameraRot.z +=0.02;
+	CameraRot.z +=0.02;
 	//document.getElementById("xrotaRation").innerHTML  = CameraRot.x;
 	//document.getElementById("yrotaRation").innerHTML  = CameraRot.y;
 	//document.getElementById("zrotaRation").innerHTML  = CameraRot.z;
@@ -123,11 +127,72 @@ function RenderScene()
         // We are projecting from 3D back to 2D
         var ScreenX = (RatioConst * (WorkingVertex.x)) / WorkingVertex.z;
         var ScreenY = (RatioConst * (WorkingVertex.y)) / WorkingVertex.z;
+        //console.log('WorkingVertex.z : ' + WorkingVertex.z);
 
         // Draw this point on-screen
         //RenderPoint(ScreenX + CenterX, ScreenY + CenterY, 3);
         PoinstList[i] = {x : ScreenX + CenterX, y : ScreenY + CenterY}
+
+        //console.log(PoinstList[i].x + ' , ' + PoinstList[i].y);
+
+        // Save depth of point
+        DepthList[i] = WorkingVertex.z;
     }
+
+
+    // 1. Calculate the average depth of each face
+	var AverageFaceDepth = new Array();
+	for(var i = 0; i < CubeFaces.length; i++)
+	{
+	    // Sum and average
+	    AverageFaceDepth[i] = DepthList[CubeFaces[i].a];
+	    AverageFaceDepth[i] += DepthList[CubeFaces[i].b];
+	    AverageFaceDepth[i] += DepthList[CubeFaces[i].c];
+	    AverageFaceDepth[i] /= 3;
+	}
+
+	// 2. Sort all faces by average face depth
+	// For clearity: AverageFaceDepth is our comparison variable,
+	// but CubeFaces is our list we are changing
+	// We are going to implement a bubble sort algorithm
+	// This is very slow but is a nice proof of concept
+	var IsSorted = false;
+	while(!IsSorted)
+	{
+	    // Default us back to a sorted state
+	    IsSorted = true;
+	    
+	    // Make sure each element[n] is < element[n+1]
+	    for(var i = 0; i < AverageFaceDepth.length - 1; i++)
+	    {
+	        // Is element[n] < element[n+1]?
+	        // This checks the opposite case: when things are inverted
+	        if(AverageFaceDepth[i] > AverageFaceDepth[i+1])
+	        {
+	            // Not sorted
+	            IsSorted = false;
+	            
+	            // Flip elements (both face depth and )
+	            var temp = AverageFaceDepth[i];
+	            AverageFaceDepth[i] = AverageFaceDepth[i+1];
+	            AverageFaceDepth[i+1] = temp;
+	            
+	            var temp = CubeFaces[i];
+	            CubeFaces[i] = CubeFaces[i+1];
+	            CubeFaces[i+1] = temp;
+	            
+	            // Break out of for loop
+	            break;
+	        }
+	    }
+	}
+
+	// Reverse array
+	CubeFaces.reverse();
+
+
+
+
 
     // for(var i = 0; i < CubeEdges.length; i++) 
     // {
@@ -146,14 +211,12 @@ function RenderScene()
     	var PointB = PoinstList[CubeFaces[i].b];
     	var PointC = PoinstList[CubeFaces[i].c];
 
-    	var color = {R : 0, G : 0, B : 0} ;
-    	if (i <= 1 ) {
-    		color = {R : 255, G : 0, B : 0} ;
-    	}
+    	//generate a unique face color
+    	var Color = {R: (CubeFaces[i].i *50) % 255, G: (CubeFaces[i].i * 128) % 255, B: (CubeFaces[i].i * 200 % 255)}
 
        // Render the face by looking up our vertex list
-        RenderTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2, color);
-
+        RenderFillTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2, Color);
+        RenderTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2);
     
     }
 
