@@ -64,7 +64,19 @@ var CubeEdges =
 ];
 
 
-
+// Define UV-texture coordinates
+// 定義點8個頂點座標 在對應材質來源圖片中的相對位置(0~1)
+var CubeUVs =
+[
+    { u:0, v:0 },
+    { u:0, v:0.5 },
+    { u:0.5, v:0.5 },
+    { u:0.5, v:0 },
+    { u:0, v:0 },
+    { u:0, v:0.5 },
+    { u:0.5, v:0.5 },
+    { u:0.5, v:0 },
+];
 
 // Camera position
 var CameraPos = {x: 0, y: 0, z: -10};
@@ -252,6 +264,10 @@ function RenderScene()
     	var PointB = PoinstList[CubeFaces[i].b];
     	var PointC = PoinstList[CubeFaces[i].c];
 
+    	var VertexA = CubeFaces[i].a;
+    	var VertexB = CubeFaces[i].b;    	
+    	var VertexC = CubeFaces[i].c;
+
     	//generate a unique face color
     	var Color = {R: (CubeFaces[i].i *50) % 255, G: (CubeFaces[i].i * 128) % 255, B: (CubeFaces[i].i * 200 % 255)}
 
@@ -260,8 +276,10 @@ function RenderScene()
         // RenderTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2);
 
                 // Render the face by looking up our vertex list
-        CustomFillTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2, Color);
+        //CustomFillTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2, Color);
         // CustomFillTriangle(0, 4, 3, 0, 3, 8, 2, Color);
+
+                CustomFillTriangle(PointA, PointB, PointC, VertexA, VertexB, VertexC, CubeFaces[i].a, CubeFaces[i].b, CubeFaces[i].c);
     
     }
 
@@ -271,31 +289,30 @@ function RenderScene()
 
 
 // Our custom triangle filler function
-function CustomFillTriangle(x1, y1, x2, y2, x3, y3, width, color)
+function CustomFillTriangle(PointA, PointB, PointC, VertexA, VertexB, VertexC, IndexA, IndexB, IndexC)
 {
+    /*** Pre-Computation ***/
+    
     // Create an array of our vertices (as tuples) for easier access
-    var Vertices = new Array({x:x1, y:y1}, {x:x2, y:y2}, {x:x3, y:y3});
+    var Points = new Array({x:PointA.x, y:PointA.y}, {x:PointB.x, y:PointB.y}, {x:PointC.x, y:PointC.y});
     
     // Sort such that (x1, y1) is always the top most point (in height), then (x2, y2), and then (x3, y3)
-    Vertices.sort(function(a,b) { return a.y - b.y; });
+    Points.sort(function(a,b) { return a.y - b.y; });
     
     // Define our edges: 1 to 2, 1 to 3, 2 to 3
     // Order is important here so that we maintain that the first point in our edge
     // is *always* higher (i.e. closer towards 0)
     var Edges = [{a:1, b:2}, {a:1, b:3}, {a:2, b:3}];
     
-
-
-    // console.log('ArrayContent: ' + ArrayContent);
     // Find the top and bottom most point
     // Note: since y grows positive top-to-bottom, we want the smallest value here
     // Note: opposite logical implication for obtaining bottom position
     // Final note: the data is already pre-sorted! Look a the first (topmost) and last (bottommost) vertices
-    var TopY = Vertices[0].y;
-    var BottomY = Vertices[2].y;
+    var TopY = Points[0].y;
+    var BottomY = Points[2].y;
     
     // Pre-compute the slops and intersections of each edge, so that we can use this data as a look-up
-    // during the horizontal scan
+    // during the horizontal scan (and used again in texturing)
     var Slopes = new Array();
     var Intercepts = new Array();
     for(var i = 0; i < 3; i++)
@@ -305,28 +322,19 @@ function CustomFillTriangle(x1, y1, x2, y2, x3, y3, width, color)
         var b = Edges[i].b - 1;
         
         // Compute slope & edge
-        Slopes[i] = (Vertices[b].y - Vertices[a].y) / (Vertices[b].x - Vertices[a].x); // dy / dx
-        Intercepts[i] = Vertices[a].y - Slopes[i] * Vertices[a].x;
-
-        // console.log('Slope[' + i + ']:' + Slopes[i] + ' , Intercepts[' + i + ']:' + Intercepts[i]);
+        Slopes[i] = (Points[b].y - Points[a].y) / (Points[b].x - Points[a].x); // dy / dx
+        Intercepts[i] = Points[a].y - Slopes[i] * Points[a].x;
     }
-
-	// Save context
-	ctx.save();
-
-	// Set width and cap style
-	ctx.lineWidth = width;
-	ctx.lineCap = "butt";
-	ctx.lineJoin = "round";
-
     
-    // Set color
-    if(color != undefined)
-        ctx.fillStyle = "rgb(" + color.R + "," + color.G + "," + color.B + ")";
-    else
-        ctx.fillStyle = "rgb(0, 0, 0)";
-
-
+    /*** Canvas Overhead ***/
+    
+    // Shortext context handle
+    var ctx = BackContextHandle;
+    
+    // Save context
+    ctx.save();
+    
+    /*** Scan-Line Filling ***/
     
     // For each horizontal line..
     for(var y = TopY; y <= BottomY; y++)
@@ -334,6 +342,9 @@ function CustomFillTriangle(x1, y1, x2, y2, x3, y3, width, color)
         // Find our min x and max x (default to out of bounds to begin with)
         var MinX = CanvasWidth + 1;
         var MaxX = -1;
+        
+        // What are the two edges we are working between?
+        var UsedEdges = new Array();
         
         // For each edge
         for(var i = 0; i < 3; i++)
@@ -343,10 +354,13 @@ function CustomFillTriangle(x1, y1, x2, y2, x3, y3, width, color)
             var b = Edges[i].b - 1;
             
             // If we are in the range of this line, find the min/max
-            if(y >= Vertices[a].y && y <= Vertices[b].y)
+            if(y >= Points[a].y && y <= Points[b].y)
             {
                 // Compute the horizontal intersection
                 var x = (y - Intercepts[i]) / Slopes[i];
+                
+                // Save this edge as one of the two we are drawing between
+                UsedEdges[UsedEdges.length] = {a:a, b:b};
                 
                 // Save if new min or max values
                 MinX = Math.min(MinX, x);
@@ -354,39 +368,87 @@ function CustomFillTriangle(x1, y1, x2, y2, x3, y3, width, color)
             }
         }
         
-        // Fill each pixel, using a line, for the given color
-        // Note: we fill 2 pixels wide because of an odd behavior of line-edges being anti-aliased
-        // which make the lines look transparent: switch to an edge of 1 to interesting behavior!
+        // Gather some important information for this horizontal scan
         
-        //RenderLine(MinX, y, MaxX, y, 2, color);
-
-        //fill each pixel with texture-mapped method
-
-        for (var x = MinX; x<= MaxX; x++)
+        
+        // Fill each pixel, using a line, for the given color
+        for(var x = MinX; x <= MaxX; x++)
         {
-        	if (typeof TextureBuffer != 'undefined') {
-                var i = (Math.floor(y) % TextureHeight) * TextureWidth * 4 + (Math.floor(x) % TextureWidth) * 4;
+            // Get texture index
+            if(TextureBuffer != undefined)
+            {
+                // Define local barycentric funcs!
+                // 計算權重  三角形A的任何一點B相對於該三角形A的權重 alpha beta gamma
+                // 取得後  透過這三個權重 可推算出其他三角形對應的相對位置
+                var f01 = function(x, y) {
+                    return (PointA.y - PointB.y) * x + (PointB.x - PointA.x) * y + PointA.x * PointB.y - PointB.x * PointA.y;
+                }
+                var f12 = function(x, y) {
+                    return (PointB.y - PointC.y) * x + (PointC.x - PointB.x) * y + PointB.x * PointC.y - PointC.x * PointB.y;
+                }
+                var f20 = function(x, y) {
+                    return (PointC.y - PointA.y) * x + (PointA.x - PointC.x) * y + PointC.x * PointA.y - PointA.x * PointC.y;
+                }
+                
+                // New approach, just use on-screen barycentric positions (sans depth?)
+               // var alpha = f12(x,y) / f12(PointA.x, PointA.y);
+                //var beta = f20(x,y) / f20(PointB.x, PointB.y);
+                // var gamma = f01(x,y) / f01(PointC.x, PointC.y);
 
-        		//console.log('i : ' + i);
+                // use cramer's rule
+                var X1 = PointA.x,
+                	X2 = PointB.x,
+                	X3 = PointC.x,
+                	X4 = x,
+                	Y1 = PointA.y,
+                	Y2 = PointB.y,
+                	Y3 = PointC.y,
+                	Y4 = y ;
 
-        		var R = TextureBuffer.data[i + 0];
-        		var G = TextureBuffer.data[i + 1];
-        		var B = TextureBuffer.data[i + 2];
+                var detA  = (X1 * Y2) - (X1 * Y3) - (X2 * Y1) + (X2 * Y3) + (X3 * Y1) - (X3 * Y2) ;
+                var detA1 = (X4 * Y2) - (X4 * Y3) - (X2 * Y4) + (X2 * Y3) + (X3 * Y4) - (X3 * Y2) ;
+                var detA2 = (X1 * Y4) - (X1 * Y3) - (X4 * Y1) + (X4 * Y3) + (X3 * Y1) - (X3 * Y4) ;
 
-        		ctx.fillStyle = 'rgb(' + R + ',' + G + ',' + B + ')';
-        		ctx.fillRect(x - width/2, y - width/2, width, width);
+                var alpha = detA1 / detA ;
+                var beta = detA2 / detA ;
 
-        		//ctx.putImageData(TextureBuffer, 10, 70);
-        	}
-        } 
+                var gamma = 1 -  alpha - beta;
+                var totalabg = alpha + beta + gamma;
 
-       
+                // console.log('alpha: ' + alpha + ',beta: ' + beta + ',gamma: ' + gamma + ', total: ' + totalabg) ;
+                
+                // var sumf12 = f12(PointA.x, PointA.y);
+                // var sumf20 = f20(PointA.x, PointA.y);
+                // var sumf01 = f01(PointA.x, PointA.y);
 
+                //onsole.log('sumf12: ' + sumf12 + ' ,sumf20: ' + sumf20 + ', sumf01: ' + sumf01);
+
+                var Tex1 = CubeUVs[IndexA];
+                var Tex2 = CubeUVs[IndexB];
+                var Tex3 = CubeUVs[IndexC];
+                
+                var tx = Tex1.u * alpha + Tex2.u * beta + Tex3.u * gamma;
+                tx = Math.floor(tx * TextureWidth);
+                
+                var ty = Tex1.v * alpha + Tex2.v * beta + Tex3.v * gamma;
+                ty = Math.floor(ty * TextureHeight);
+                
+                var i = (ty % TextureHeight) * TextureWidth * 4 + (tx % TextureWidth) * 4;
+                /*var R = Math.floor(alpha * 255);//TextureBuffer.data[i + 0];
+                var G = Math.floor(beta * 255);//TextureBuffer.data[i + 1];
+                var B = Math.floor(gamma * 255);//TextureBuffer.data[i + 2];
+                */
+                var R = TextureBuffer.data[i + 0];
+                var G = TextureBuffer.data[i + 1];
+                var B = TextureBuffer.data[i + 2];
+                ctx.fillStyle = "rgb(" + R + "," + G + "," + B + ")";
+                ctx.fillRect(x - 1, y - 1, 2, 2);
+            }
+        }
     }
-
-
- 	ctx.restore();
-
+    
+    // Revert context
+    ctx.restore();
     
     // Done rendering triangle
 }
