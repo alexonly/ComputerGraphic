@@ -65,33 +65,39 @@ var CubeUVs =
 // Cube face data
 var CubeFaces =
 [
-    // Front
-    { a:0, b:1, c:2, i:1, f:0 },
-    { a:2, b:3, c:0, i:1, f:1 },
+    // back
+    { a:0, b:1, c:2, i:1, f:0, side : 'back' },
+    { a:2, b:3, c:0, i:1, f:1, side : 'back' },
     
-    // Top
-    { a:1, b:5, c:6, i:2, f:2 },
-    { a:6, b:2, c:1, i:2, f:3 },
+    // bottom
+    { a:1, b:5, c:6, i:2, f:2, side : 'bottom' },
+    { a:6, b:2, c:1, i:2, f:3, side : 'bottom' },
     
-    // Back
-    { a:5, b:4, c:7, i:3, f:4 },
-    { a:7, b:6, c:5, i:3, f:5 },
+    // front
+    { a:5, b:4, c:7, i:3, f:4, side : 'front' },
+    { a:7, b:6, c:5, i:3, f:5, side : 'front' },
     
-    // Bottom
-    { a:4, b:0, c:3, i:4, f:6 },
-    { a:3, b:7, c:4, i:4, f:7 },
+    // top
+    { a:4, b:0, c:3, i:4, f:6, side : 'top' },
+    { a:3, b:7, c:4, i:4, f:7, side : 'top' },
     
-    // Right
-    { a:3, b:2, c:6, i:5, f:8 },
-    { a:6, b:7, c:3, i:5, f:9 },
+    // right
+    { a:3, b:2, c:6, i:5, f:8, side : 'right' },
+    { a:6, b:7, c:3, i:5, f:9, side : 'right' },
     
-    // Left
-    { a:0, b:1, c:5, i:6, f:10 },
-    { a:5, b:4, c:0, i:6, f:11 },
+    // left
+    { a:4, b:5, c:1, i:6, f:10, side : 'left' },
+    { a:1, b:0, c:4, i:6, f:11, side : 'left' },
 ];
 
 // Camera position
 var CameraPos = {x: 0, y: 0, z: -10};
+var CameraPos_Len = Math.sqrt( (CameraPos.x * CameraPos.x) + (CameraPos.y * CameraPos.y) + (CameraPos.z * CameraPos.z)  );
+var CameraPosVector = {
+    x : (0 - CameraPos.x) / CameraPos_Len,
+    y : (0 - CameraPos.y) / CameraPos_Len,
+    z : (0 - CameraPos.z) / CameraPos_Len
+};
 
 // Camera distortion
 var RatioConst = 300;
@@ -110,7 +116,96 @@ var TextureBuffer;
 // Shortext context handle
 var ctx ;
 
+// Create a light angle (where the light hits the surfaces)
+var LightVector = {x:0.7, y:0.7, z:0.7};
 
+
+function ComputeColor(Color, Angle) {
+    //Bounds from 0 to pi/2
+    Angle = Math.min(Angle, Math.PI / 2);
+
+    //Normalize angle (計算百分比,)
+    Angle /= Math.PI / 2.0 ;
+    // console.log('Angle :' + Angle);
+    Angle = Angle * 0.7 ;
+    Angle = (1 - Angle) + 0.2;
+
+    // Make color darker based on angle
+    Color.R = Math.floor(Color.R * Angle);
+    Color.G = Math.floor(Color.G * Angle);
+    Color.B = Math.floor(Color.B * Angle);
+    
+    // Done!
+    return Color;
+
+
+}
+
+function caculateAngleInradian(VertexA, VertexB) {
+    var lengthOfVectorA = Math.sqrt(VertexA.x * VertexA.x + VertexA.y * VertexA.y + VertexA.z * VertexA.z);
+    var lengthOfVectorB = Math.sqrt(VertexB.x * VertexB.x + VertexB.y * VertexB.y + VertexB.z * VertexB.z);
+    var ADotB = (VertexA.x * VertexB.x + VertexA.y * VertexB.y + VertexA.z * VertexB.z ) ;
+    // console.log('lengthOfVectorA : ' + lengthOfVectorA + ',lengthOfVectorB : ' + lengthOfVectorB + ',ADotB : ' + ADotB);
+    return Math.acos( ADotB / (lengthOfVectorA * lengthOfVectorB)  );
+}
+
+function DotProduct (VertexA, VertexB) {
+    var ADotB = (VertexA.x * VertexB.x + VertexA.y * VertexB.y + VertexA.z * VertexB.z ) ;
+    return ADotB;
+}
+
+function ComputeVector(StartPoint, EndPoint) {
+    return {
+        x : EndPoint.x - StartPoint.x,
+        y : EndPoint.y - StartPoint.y,
+        z : EndPoint.z - StartPoint.z
+    };
+
+}
+
+function CrossProduct  (VectorA, VectorB) {
+    var OutVector = {x : 0, y :0, z : 0} ;
+    OutVector.x = (VectorA.y * VectorB.z - VectorA.z * VectorB.y);
+    OutVector.y = (VectorA.z * VectorB.x - VectorA.x * VectorB.z);
+    OutVector.z = (VectorA.x * VectorB.y - VectorA.y * VectorB.x);
+    return OutVector;
+}
+
+
+function GetSurfaceNormal(VertexA, VertexB, VertexC) {
+    //console.log('VertexB : ' + VertexB.x + ', ' + VertexB.y + ', ' + VertexB.z);
+    // find the first vector and second vector 
+    var VectorAB = {x : VertexB.x - VertexA.x, 
+                    y : VertexB.y - VertexA.y,
+                    z : VertexB.z - VertexA.z } ;
+
+    var VectorAC = {x : VertexC.x - VertexA.x, 
+                    y : VertexC.y - VertexA.y,
+                    z : VertexC.z - VertexA.z } ;
+
+    // console.log('VectorAC : ' + VectorAC.x + ', ' + VectorAC.y + ', ' + VectorAC.z);
+    // var powersum = (VectorAB.x * VectorAB.x) + (VectorAB.y * VectorAB.y) + (VectorAB.z * VectorAB.z);
+    //console.log('powersum : '  +powersum);
+
+    //Normalize veceor 計算單位向量
+    var LengthAB = Math.sqrt(VectorAB.x * VectorAB.x + VectorAB.y * VectorAB.y + VectorAB.z * VectorAB.z);
+    //console.log('LengthAB : ' + LengthAB);
+    VectorAB = {x : VectorAB.x / LengthAB, 
+                y : VectorAB.y / LengthAB,
+                z : VectorAB.z / LengthAB } ;
+
+    var LengthAC = Math.sqrt(VectorAC.x * VectorAC.x + VectorAC.y * VectorAC.y + VectorAC.z * VectorAC.z);
+    VectorAC = {x : VectorAC.x / LengthAC, 
+                y : VectorAC.y / LengthAC,
+                z : VectorAC.z / LengthAC } ;
+
+     //console.log('VectorAB : ' + VectorAB.x + ', ' + VectorAB.y + ', ' + VectorAB.z);
+     //console.log('VectorAC : ' + VectorAC.x + ', ' + VectorAC.y + ', ' + VectorAC.z);
+    // Return the computed corss product
+    // Order here is very  important ,must be counter-clockwise according to  right-hand rule
+    return CrossProduct(VectorAC, VectorAB);    
+
+}
 
 
 function Init()
@@ -224,6 +319,8 @@ function RenderScene()
         AverageFaceDepth[i] += DepthList[CubeFaces[i].b];
         AverageFaceDepth[i] += DepthList[CubeFaces[i].c];
         AverageFaceDepth[i] /= 3;
+
+        CubeFaces[i].AFD = AverageFaceDepth[i];
     }
 
     // 2. Sort all faces by average face depth
@@ -264,7 +361,7 @@ function RenderScene()
 
     // Reverse array
     CubeFaces.reverse();
-
+    //console.log(CubeFaces);
 
 
 
@@ -296,18 +393,110 @@ function RenderScene()
 
         //generate a unique face color
         var Color = {R: (CubeFaces[i].i *50) % 255, G: (CubeFaces[i].i * 128) % 255, B: (CubeFaces[i].i * 200 % 255)}
+        
+        var lineColor ;
+        switch (CubeFaces[i].side) {
+            case 'top' : //red
+                Color = {R : 255, G : 0, B : 0};
+                lineColor = {R : 255, G : 0, B : 0};
+                break ;
+            case 'front' : //blue
+                Color = {R : 0, G : 0, B : 255};
+                lineColor = {R : 0, G : 0, B : 255};
+                break;
+            case 'left' : //green
+                Color = {R : 0, G : 255, B : 0};
+                lineColor = {R : 0, G : 255, B : 0};
+                break; 
+            case 'right' : //yellow
+                Color = {R : 255, G : 255, B : 0};
+                lineColor = {R : 255, G : 255, B : 0};
+                break; 
+            case 'bottom' : //cyan
+                Color = {R : 0, G : 255, B : 255};
+                lineColor = {R : 0, G : 255, B : 255};
+                break; 
+            case 'back' : //mengata
+                Color = {R : 255, G : 0, B : 255};
+                lineColor = {R : 255, G : 0, B : 255};
+                break; 
+            default :
+                Color = {R : 255, G : 255, B : 255}; 
+                lineColor =   {R : 100, G : 100, B : 100}; 
+        }
+
+
+        // if (CubeFaces[i].side == 'top') {
+        //     //console.log('gotta');
+        //     Color = {R : 255, G : 0, B : 0};
+        // }else if (CubeFaces[i].side == 'front') {
+        //     Color = {R : 0, G : 0, B : 255};
+        // }
+        // else {
+        //    //console.log('gotta'); 
+        //    Color = {R : 255, G : 255, B : 255};
+        // }
+       
+        //compute color with shading effect
+        var outVector = GetSurfaceNormal(VertexA, VertexB, VertexC);
+        CubeFaces[i].outVector = outVector;
+
+        var outVectorWithoutNormalized = CrossProduct(ComputeVector(VertexA, VertexC), ComputeVector(VertexA, VertexB) )       ;
+        outVectorWithoutNormalized.x += VertexA.x;
+        outVectorWithoutNormalized.y += VertexA.y;
+        outVectorWithoutNormalized.z += VertexA.z;
+
+        //console.log('outVector : ' + outVector.x + ', ' + outVector.y + ', ' + outVector.z);
+        var AngleBetOuterAndLight = caculateAngleInradian(outVector, LightVector);
+        //console.log('AngleBetOuterAndLight : ' + AngleBetOuterAndLight);
+        
+        //ComputeColor(Color, AngleBetOuterAndLight);    
+
+
+
+       // Verify if observer could see trangile surface with methodlogy of backface-culling
+       var dotNorDirAndCamera = DotProduct(outVector, CameraPosVector);
+       CubeFaces[i].dotNorDirAndCamera = dotNorDirAndCamera;
+       if (dotNorDirAndCamera > 0) {
+            //console.log('Hidden : ' + CubeFaces[i].side);
+            RenderLine( (outVectorWithoutNormalized.x / outVectorWithoutNormalized.z * RatioConst) + CenterX, 
+                (outVectorWithoutNormalized.y / outVectorWithoutNormalized.z * RatioConst) + CenterY,
+                CenterX,
+                CenterY,
+                3,
+                lineColor
+            );
+            //alert('Hidden : ' + CubeFaces[i].side + ',outVector : ' + outVector.x + ',' + outVector.y + ',' + outVector.z);
+
+            continue ;
+       }
 
        // Render the face by looking up our vertex list
-        // RenderFillTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2, Color);
-        // RenderTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2);
+         RenderFillTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2, Color);
+         RenderTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2);
 
-                // Render the face by looking up our vertex list
+         RenderLine( (outVectorWithoutNormalized.x / outVectorWithoutNormalized.z * RatioConst) + CenterX, 
+                    (outVectorWithoutNormalized.y / outVectorWithoutNormalized.z * RatioConst) + CenterY,
+                    CenterX,
+                    CenterY,
+                    3,
+                    lineColor
+            );
+
+
+
+       // Render the face by looking up our vertex list
+
+        
+
+
         //CustomFillTriangle(PointA.x, PointA.y, PointB.x, PointB.y, PointC.x, PointC.y, 2, Color);
         // CustomFillTriangle(0, 4, 3, 0, 3, 8, 2, Color);
 
-     CustomFillTriangle(PointA, PointB, PointC, VertexA, VertexB, VertexC, CubeFaces[i].a, CubeFaces[i].b, CubeFaces[i].c, UVA, UVB, UVC);
+     // CustomFillTriangle(PointA, PointB, PointC, VertexA, VertexB, VertexC, CubeFaces[i].a, CubeFaces[i].b, CubeFaces[i].c, UVA, UVB, UVC);
     
     }
+    // console.log(CubeFaces);
 
 
 
@@ -469,6 +658,9 @@ function CustomFillTriangle(PointA, PointB, PointC, VertexA, VertexB, VertexC, I
                 var R = TextureBuffer.data[i + 0];
                 var G = TextureBuffer.data[i + 1];
                 var B = TextureBuffer.data[i + 2];
+
+
+
                 ctx.fillStyle = "rgb(" + R + "," + G + "," + B + ")";
                 ctx.fillRect(x - 1, y - 1, 2, 2);
             }
